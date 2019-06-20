@@ -1,0 +1,2 @@
+Horizontal stress  -0.0845016
+Vertical stress  1.34353

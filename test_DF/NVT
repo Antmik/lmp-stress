@@ -1,0 +1,119 @@
+# settings
+
+units		lj
+dimension	3
+boundary 	p f p
+atom_style	atomic
+#processors      2 2 2
+
+region		box block 0 15 0 40 0 10      #create total region
+create_box      4 box                                #create simulation box
+
+region		fluid1_region block 0 15 4 19 0 10 units box     #create wall region
+create_atoms	1 random 1800 999999 fluid1_region 	    #create noise atoms 750
+
+#Create walls
+lattice		sc 1.
+region		wall_south block 0 15 0 3.5 0 10 units box      #create wall region
+create_atoms	2 region wall_south           #create atom wall_down
+
+region		wall_north block 0 15 36.5 50 0 10 units box     #create wall region
+create_atoms	3 region wall_north           #create atom wall_up
+
+region		fluid2_region block 0 15 21 36 0 10 units box     #create wall region
+create_atoms	4 random 1800 999999 fluid2_region 	    #create noise atoms 750
+
+mass		1 1.0
+mass		2 1.0
+mass		3 1.0
+mass		4 1.0
+#==========================================================================
+#for argon
+variable	t equal 1.0
+variable	rc equal 4.5
+variable	srate equal 1
+#==========================================================================
+
+# default value
+timestep	0.005
+
+# check neighbor parameters
+neigh_modify	delay 1 every 1
+
+pair_style      lj/cut 2.5
+pair_coeff      * * 1.0 1.0 2.5
+pair_coeff      1 4 0.1 1.0 2.5
+
+#=======================================================
+group	        flow1 type 1
+group	        flow2 type 4
+group 		upper type 2
+group 		lower type 3
+
+group           wall union upper lower 
+group           flow union flow1 flow2
+
+variable 	modified_type1 atom gmask(flow1)
+variable 	modified_type2 atom gmask(flow2)
+
+variable 	modified_type atom "type + 3*v_modified_type1 - 3*v_modified_type2"
+
+velocity        flow create 1.0 11111 dist gaussian                                 
+velocity        flow scale 1.0
+
+velocity	wall set 0.0 0.0 0.0 units box
+fix		wall_setforce wall setforce 0.0 0.0 0.0
+
+compute 	myTemp flow temp/partial 0 1 1
+fix         	noise_integrator flow nvt temp 1.0 1.0 1.0
+fix_modify 	noise_integrator temp myTemp
+
+fix 		wall_integrator wall nve
+#==========================================================
+# Minimizing potential energy
+minimize 1.0e-8 1.0e-8 10000 10000
+#==========================================================
+# Equilibrium run
+
+reset_timestep 0
+
+thermo          10000
+thermo_modify   temp myTemp
+
+run		100000#0
+#==========================================================
+# Equilibrium run shear
+
+reset_timestep 0
+
+velocity 	upper set ${srate} 0.0 0.0 units box
+velocity 	lower set -${srate} 0.0 0.0 units box
+
+thermo          10000
+thermo_modify   temp myTemp
+
+run		200000#0
+
+#==========================================================
+# Data gathering
+
+reset_timestep 0
+
+thermo          10000
+thermo_modify   temp myTemp
+
+dump 		myDump all custom 100 dump.atom id type x y z vx vy vz
+
+dump 		myDump1 all custom 100 dump.atom1 id v_modified_type x y z vx vy vz
+
+dump 		myDump2 flow1 custom 100 dump.atom2 id type x y z vx vy vz
+
+run		200000#0
+
+
+
+
+
+
+
+
